@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+{% set analysis_id = analysis_id %}
+{% block title %}{{ case.case_number }} — PCAP Engine{% endblock %}
+
+{% block content %}
+<div class="page-header flex justify-between items-center">
+  <div>
+    <h2>{{ case.case_number }}</h2>
+    <p class="text-muted">{{ case.file_name }} &nbsp;·&nbsp;
+      <span class="mono">{{ case.file_hash[:24] }}…</span></p>
+    <p class="text-muted" style="font-size:11px">Analysis ID: {{ case.analysis_id }}</p>
+  </div>
+  <div class="flex gap-2">
+    <a href="{{ url_for('export_pdf') }}?analysis_id={{ analysis_id }}"
+       class="btn btn-primary">↓ PDF Report</a>
+    <a href="{{ url_for('export_iocs_csv') }}?analysis_id={{ analysis_id }}"
+       class="btn">↓ IOCs CSV</a>
+    <a href="{{ url_for('export_iocs_json') }}?analysis_id={{ analysis_id }}"
+       class="btn">↓ IOCs JSON</a>
+  </div>
+</div>
+
+{# In-memory unavailable notice (shown after server restart) #}
+{% if not case.flows %}
+<div style="background:rgba(234,179,8,.1);border:1px solid var(--yellow);
+            border-radius:var(--radius);padding:12px 16px;margin-bottom:20px;
+            font-size:13px;color:var(--yellow)">
+  ⚠ Detection results (beacons, chains, DNS) are not available — the server
+  was restarted since this analysis ran. Re-upload the PCAP to regenerate them.
+  Flow data, IOCs, and severity are still accessible below from the database.
+</div>
+{% endif %}
+
+{# Stats strip #}
+<div class="grid-4" style="margin-bottom:20px">
+  <div class="card">
+    <div class="card-title">Flows</div>
+    <div class="card-value text-accent">{{ "{:,}".format(flow_count) }}</div>
+  </div>
+  <div class="card">
+    <div class="card-title">HTTP Sessions</div>
+    <div class="card-value">{{ "{:,}".format(http_count) }}</div>
+  </div>
+  <div class="card">
+    <div class="card-title">Beacon Alerts</div>
+    <div class="card-value {% if beacon_count > 0 %}text-red{% endif %}">
+      {{ beacon_count }}</div>
+  </div>
+  <div class="card">
+    <div class="card-title">IOCs Found</div>
+    <div class="card-value {% if ioc_count > 0 %}text-red{% endif %}">
+      {{ ioc_count }}</div>
+  </div>
+</div>
+
+<div class="grid-2" style="margin-bottom:20px">
+  {# Case info #}
+  <div class="card">
+    <div style="font-weight:600;margin-bottom:8px">Case Information</div>
+    <table style="font-size:13px">
+      <tr><td class="text-muted" style="padding:4px 0;width:140px">Case Number</td>
+          <td style="font-weight:500;color:var(--accent)">{{ case.case_number }}</td></tr>
+      <tr><td class="text-muted" style="padding:4px 0">Analysis ID</td>
+          <td class="mono" style="font-size:11px">{{ case.analysis_id }}</td></tr>
+      <tr><td class="text-muted" style="padding:4px 0">Status</td>
+          <td>
+            {% set lvl = severity.CRITICAL + severity.HIGH + severity.MEDIUM + severity.LOW %}
+            {% if severity.CRITICAL %}
+              <span class="badge badge-critical">CRITICAL THREAT</span>
+            {% elif severity.HIGH %}
+              <span class="badge badge-high">HIGH RISK</span>
+            {% elif severity.MEDIUM %}
+              <span class="badge badge-medium">MEDIUM RISK</span>
+            {% elif lvl > 0 %}
+              <span class="badge badge-low">LOW RISK</span>
+            {% else %}
+              <span class="badge" style="color:var(--muted)">CLEAN</span>
+            {% endif %}
+          </td></tr>
+      <tr><td class="text-muted" style="padding:4px 0">Started</td>
+          <td class="mono" style="font-size:12px">{{ case.created_at[:19] }}</td></tr>
+      <tr><td class="text-muted" style="padding:4px 0">File</td>
+          <td>{{ case.file_name }}</td></tr>
+      {% if pcap %}
+      <tr><td class="text-muted" style="padding:4px 0">Packets</td>
+          <td>{{ "{:,}".format(pcap.packet_count) }}</td></tr>
+      <tr><td class="text-muted" style="padding:4px 0">Duration</td>
+          <td>{{ "%.2f"|format(pcap.duration_sec or 0) }}s</td></tr>
+      {% endif %}
+      <tr><td class="text-muted" style="padding:4px 0">Attack Chains</td>
+          <td>{{ chain_count }}</td></tr>
+    </table>
+  </div>
+
+  {# Severity breakdown chart (reads from DB, always available) #}
+  <div class="card">
+    <div style="font-weight:600;margin-bottom:8px">Threat Severity</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <div style="background:rgba(255,45,85,.15);border:1px solid rgba(255,45,85,.3);
+                  border-radius:var(--radius);padding:10px;text-align:center">
+        <div style="font-size:22px;font-weight:700;color:#ff2d55">{{ severity.CRITICAL }}</div>
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;
+                    letter-spacing:.5px">Critical</div>
+      </div>
+      <div style="background:rgba(255,107,53,.15);border:1px solid rgba(255,107,53,.3);
+                  border-radius:var(--radius);padding:10px;text-align:center">
+        <div style="font-size:22px;font-weight:700;color:#ff6b35">{{ severity.HIGH }}</div>
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;
+                    letter-spacing:.5px">High</div>
+      </div>
+      <div style="background:rgba(255,214,10,.15);border:1px solid rgba(255,214,10,.3);
+                  border-radius:var(--radius);padding:10px;text-align:center">
+        <div style="font-size:22px;font-weight:700;color:#ffd60a">{{ severity.MEDIUM }}</div>
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;
+                    letter-spacing:.5px">Medium</div>
+      </div>
+      <div style="background:rgba(48,209,88,.15);border:1px solid rgba(48,209,88,.3);
+                  border-radius:var(--radius);padding:10px;text-align:center">
+        <div style="font-size:22px;font-weight:700;color:#30d158">{{ severity.LOW }}</div>
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;
+                    letter-spacing:.5px">Low</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Navigation grid #}
+<div class="card" style="margin-bottom:20px">
+  <div style="font-weight:600;margin-bottom:12px">Navigate to</div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+    <a href="{{ url_for('sessions') }}?analysis_id={{ analysis_id }}"
+       class="btn" style="justify-content:center">⇄ Sessions</a>
+    <a href="{{ url_for('beacons_page') }}?analysis_id={{ analysis_id }}"
+       class="btn" style="justify-content:center">◎ Beacons</a>
+    <a href="{{ url_for('dns_page') }}?analysis_id={{ analysis_id }}"
+       class="btn" style="justify-content:center">⌬ DNS</a>
+    <a href="{{ url_for('files_page') }}?analysis_id={{ analysis_id }}"
+       class="btn" style="justify-content:center">⊞ Files</a>
+    <a href="{{ url_for('iocs') }}?analysis_id={{ analysis_id }}"
+       class="btn" style="justify-content:center">⚑ IOCs</a>
+    <a href="{{ url_for('timeline') }}?analysis_id={{ analysis_id }}"
+       class="btn" style="justify-content:center">⏱ Timeline</a>
+    <a href="{{ url_for('chains_page') }}?analysis_id={{ analysis_id }}"
+       class="btn" style="justify-content:center">⛓ Chains</a>
+    <a href="{{ url_for('upload') }}" class="btn"
+       style="justify-content:center">↑ Re-upload</a>
+  </div>
+</div>
+
+{# Traffic timeline #}
+<div class="card">
+  <div class="flex justify-between items-center mb-4">
+    <span style="font-weight:600">Traffic Timeline</span>
+    <span class="text-muted" style="font-size:12px">packets per bucket</span>
+  </div>
+  <div class="chart-box"><canvas id="timelineChart"></canvas></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+fetch('/api/timeline?analysis_id={{ analysis_id }}')
+  .then(r => r.json())
+  .then(data => {
+    if (!data || !data.length) {
+      document.getElementById('timelineChart').closest('.card')
+        .insertAdjacentHTML('beforeend',
+          '<p style="text-align:center;color:var(--muted);padding:12px;font-size:13px">'
+          +'No timeline data available</p>');
+      return;
+    }
+    new Chart(document.getElementById('timelineChart'), {
+      type: 'bar',
+      data: {
+        labels: data.map(d => (d.time || '').slice(11,19)),
+        datasets: [{
+          label: 'Packets',
+          data: data.map(d => d.packets || 0),
+          backgroundColor: 'rgba(99,102,241,.6)',
+          borderWidth: 0, borderRadius: 3
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: '#64748b', maxTicksLimit: 12 },
+               grid: { color: '#1e2130' } },
+          y: { ticks: { color: '#64748b' }, grid: { color: '#1e2130' },
+               beginAtZero: true }
+        }
+      }
+    });
+  }).catch(() => {});
+</script>
+{% endblock %}

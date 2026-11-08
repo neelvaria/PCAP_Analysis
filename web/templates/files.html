@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Extracted Files — PCAP Engine{% endblock %}
+{% block content %}
+<div class="page-header"><h2>Extracted Files</h2><p>Files recovered from HTTP streams and TCP payload carving</p></div>
+{% if files %}
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>Filename</th><th>Size</th><th>Type</th><th>Method</th>
+        <th>SHA-256</th><th>VT Verdict</th><th>Detections</th><th>Source</th>
+      </tr></thead>
+      <tbody>
+        {% for f in files %}
+        <tr>
+          <td class="mono" style="color:var(--accent)">{{ f.filename[:30] }}</td>
+          <td>{{ "%.1f"|format((f.size or 0)/1024) }} KB</td>
+          <td class="text-muted">{{ f.type[:30] }}</td>
+          <td><span class="badge badge-info">{{ f.method }}</span></td>
+          <td class="mono text-muted" style="font-size:11px">{{ f.sha256[:20] }}…</td>
+          <td>
+            {% if 'MALICIOUS' in f.verdict %}
+              <span class="badge badge-critical">MALICIOUS</span>
+            {% elif 'SUSPICIOUS' in f.verdict %}
+              <span class="badge badge-high">SUSPICIOUS</span>
+            {% elif f.verdict == 'CLEAN' %}
+              <span class="badge badge-clean">CLEAN</span>
+            {% else %}
+              <span class="badge" style="background:rgba(100,116,139,.15);color:var(--muted)">{{ f.verdict }}</span>
+            {% endif %}
+          </td>
+          <td>{% if f.total %}{{ f.malicious }}/{{ f.total }}{% else %}—{% endif %}</td>
+          <td class="text-muted" style="font-size:12px">{{ (f.source or '')[:35] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card empty-state"><p>No files extracted from this capture</p></div>
+{% endif %}
+{% endblock %}

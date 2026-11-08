@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}New Investigation — PCAP Engine{% endblock %}
+{% block content %}
+<div class="page-header"><h2>Start New Investigation</h2><p>Provide PCAP file and case number to begin forensic analysis</p></div>
+<div class="card" style="max-width:560px">
+  <form method="POST" enctype="multipart/form-data">
+
+    <!-- Case Number — required -->
+    <div style="margin-bottom:20px">
+      <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">
+        Case Number <span style="color:var(--red)">*</span>
+      </label>
+      <input type="text" name="case_number" required
+             placeholder="e.g. CASE-2025-001 or IR-20250416"
+             style="width:100%;background:var(--card);border:1px solid var(--border);
+                    color:var(--text);padding:9px 12px;border-radius:var(--radius);
+                    font-size:13px;font-family:var(--font)">
+      <p style="font-size:11px;color:var(--muted);margin-top:5px">
+        Unique identifier for this investigation. Used in reports and logs.
+      </p>
+    </div>
+
+    <!-- PCAP File — required -->
+    <div style="margin-bottom:20px">
+      <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">
+        PCAP File <span style="color:var(--red)">*</span>
+      </label>
+      <div id="drop-zone" style="border:2px dashed var(--border);border-radius:var(--radius);
+           padding:36px;text-align:center;cursor:pointer;transition:border-color .2s"
+           onclick="document.getElementById('pcap-input').click()">
+        <div style="font-size:28px;margin-bottom:6px">⬆</div>
+        <p style="color:var(--muted);font-size:13px">
+          Drop .pcap / .pcapng here or <span style="color:var(--accent)">browse</span>
+        </p>
+        <p id="file-name" style="color:var(--text);margin-top:8px;font-size:13px;font-weight:500"></p>
+      </div>
+      <input type="file" id="pcap-input" name="pcap" accept=".pcap,.pcapng,.cap"
+             style="display:none" onchange="showFileName(this)" required>
+    </div>
+
+    <div class="flex gap-2">
+      <button type="submit" class="btn btn-primary" style="flex:1">Start Analysis →</button>
+      <a href="{{ url_for('index') }}" class="btn">Cancel</a>
+    </div>
+  </form>
+
+  <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+    <p style="font-size:12px;color:var(--muted)">
+      Supported: .pcap, .pcapng, .cap · Max 200 MB<br>
+      If the same file was already analysed, existing results will be shown.
+    </p>
+  </div>
+</div>
+
+<script>
+function showFileName(input) {
+  const name = input.files[0]?.name || '';
+  document.getElementById('file-name').textContent = name;
+  document.getElementById('drop-zone').style.borderColor = name ? 'var(--accent)' : 'var(--border)';
+}
+const dz = document.getElementById('drop-zone');
+dz.addEventListener('dragover',  e => { e.preventDefault(); dz.style.borderColor='var(--accent)'; });
+dz.addEventListener('dragleave', () => { dz.style.borderColor='var(--border)'; });
+dz.addEventListener('drop', e => {
+  e.preventDefault();
+  const f = e.dataTransfer.files[0];
+  if (f) { document.getElementById('pcap-input').files = e.dataTransfer.files; showFileName({files:[f]}); }
+});
+</script>
+{% endblock %}

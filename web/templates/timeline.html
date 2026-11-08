@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}Timeline & Network Graph — PCAP Engine{% endblock %}
+{% block content %}
+<div class="page-header"><h2>Attack Timeline & Network Graph</h2></div>
+
+<div class="card" style="margin-bottom:20px">
+  <div class="flex justify-between items-center mb-4">
+    <span style="font-weight:600">Traffic Volume Timeline</span>
+  </div>
+  <div style="position:relative;height:200px"><canvas id="timelineChart"></canvas></div>
+</div>
+
+<div class="card">
+  <div class="flex justify-between items-center mb-4">
+    <span style="font-weight:600">Network Connection Graph</span>
+    <div class="flex gap-2" style="font-size:12px">
+      <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:50%;background:#6366f1;display:inline-block"></span>Internal</span>
+      <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:50%;background:#06b6d4;display:inline-block"></span>External</span>
+      <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:50%;background:#ef4444;display:inline-block"></span>Suspicious</span>
+    </div>
+  </div>
+  <div id="graph" style="height:460px;background:var(--surface);border-radius:var(--radius);overflow:hidden"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const AID = "{{ analysis_id }}";
+
+fetch('/api/timeline?analysis_id=' + AID)
+  .then(r => r.json())
+  .then(data => {
+    if (!data || !data.length) return;
+    new Chart(document.getElementById('timelineChart'), {
+      type: 'line',
+      data: {
+        labels: data.map(d => (d.time||'').slice(11,19)),
+        datasets: [
+          { label:'Packets', data: data.map(d=>d.packets||0),
+            borderColor:'#6366f1', backgroundColor:'rgba(99,102,241,.15)',
+            fill:true, tension:0.3, pointRadius:2, borderWidth:2 },
+          { label:'Bytes/100', data: data.map(d=>Math.round((d.bytes||0)/100)),
+            borderColor:'#06b6d4', backgroundColor:'transparent',
+            fill:false, tension:0.3, pointRadius:0, borderWidth:1.5, borderDash:[4,4] }
+        ]
+      },
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        plugins:{legend:{labels:{color:'#94a3b8',font:{size:11}}}},
+        scales:{
+          x:{ticks:{color:'#64748b',maxTicksLimit:14,font:{size:11}},grid:{color:'#1e2130'}},
+          y:{ticks:{color:'#64748b',font:{size:11}},grid:{color:'#1e2130'}}
+        }
+      }
+    });
+  }).catch(()=>{});
+
+fetch('/api/graph?analysis_id=' + AID)
+  .then(r => r.json())
+  .then(({ nodes, edges }) => {
+    if (!nodes || !nodes.length) {
+      document.getElementById('graph').innerHTML =
+        '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#64748b">No graph data — upload a PCAP first</div>';
+      return;
+    }
+    const el = document.getElementById('graph');
+    const W = el.clientWidth || 700, H = el.clientHeight || 460;
+    const svg = d3.select('#graph').append('svg').attr('width',W).attr('height',H);
+    svg.append('defs').selectAll('marker').data(['default','threat']).join('marker')
+      .attr('id',d=>'arr-'+d).attr('viewBox','0 0 10 10').attr('refX',18).attr('refY',5)
+      .attr('markerWidth',5).attr('markerHeight',5).attr('orient','auto')
+      .append('path').attr('d','M0,0L10,5L0,10z')
+      .attr('fill',d=>d==='threat'?'#ef4444':'#334155');
+
+    const sim = d3.forceSimulation(nodes)
+      .force('link',   d3.forceLink(edges).id(d=>d.id).distance(90).strength(0.4))
+      .force('charge', d3.forceManyBody().strength(-180))
+      .force('center', d3.forceCenter(W/2,H/2))
+      .force('collision', d3.forceCollide(28));
+
+    const link = svg.append('g').selectAll('line').data(edges).join('line')
+      .attr('stroke', d=>d.threat>=60?'#ef4444':'#2a2d3e')
+      .attr('stroke-width', d=>Math.max(1,Math.log1p(d.bytes/5000)))
+      .attr('stroke-opacity',.7)
+      .attr('marker-end', d=>d.threat>=60?'url(#arr-threat)':'url(#arr-default)');
+
+    const node = svg.append('g').selectAll('g').data(nodes).join('g')
+      .call(d3.drag()
+        .on('start',(ev,d)=>{if(!ev.active)sim.alphaTarget(.3).restart();d.fx=d.x;d.fy=d.y;})
+        .on('drag', (ev,d)=>{d.fx=ev.x;d.fy=ev.y;})
+        .on('end',  (ev,d)=>{if(!ev.active)sim.alphaTarget(0);d.fx=null;d.fy=null;}));
+
+    node.append('circle').attr('r',14)
+      .attr('fill',d=>d.threat>=60?'rgba(239,68,68,.25)':d.private?'rgba(99,102,241,.25)':'rgba(6,182,212,.2)')
+      .attr('stroke',d=>d.threat>=60?'#ef4444':d.private?'#6366f1':'#06b6d4')
+      .attr('stroke-width',1.5);
+    node.append('text').text(d=>d.id)
+      .attr('text-anchor','middle').attr('dy','28px')
+      .attr('font-size','10px').attr('fill','#94a3b8');
+
+    const tt = d3.select('body').append('div')
+      .style('position','fixed').style('pointer-events','none')
+      .style('background','#1e2130').style('border','1px solid #2a2d3e')
+      .style('padding','8px 12px').style('border-radius','6px')
+      .style('font-size','12px').style('color','#e2e8f0')
+      .style('opacity','0').style('transition','opacity .15s');
+
+    node.on('mouseover',(ev,d)=>tt.style('opacity','1')
+          .html(`<b>${d.id}</b><br>${d.private?'Internal':'External'} · threat:${d.threat}`)
+          .style('left',(ev.clientX+12)+'px').style('top',(ev.clientY-8)+'px'))
+        .on('mousemove',ev=>tt.style('left',(ev.clientX+12)+'px').style('top',(ev.clientY-8)+'px'))
+        .on('mouseout',()=>tt.style('opacity','0'));
+
+    sim.on('tick',()=>{
+      link.attr('x1',d=>d.source.x).attr('y1',d=>d.source.y)
+          .attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);
+      node.attr('transform',d=>`translate(${d.x},${d.y})`);
+    });
+  }).catch(()=>{});
+</script>
+{% endblock %}

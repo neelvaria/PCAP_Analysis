@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Sessions — PCAP Engine{% endblock %}
+{% block content %}
+{% if no_case %}
+<div style="background:rgba(99,102,241,.1);border:1px solid var(--accent);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;font-size:13px;color:var(--accent)">
+  ⚠ No case selected — sessions are isolated per investigation. Open a case from the dashboard to view its flows.
+</div>
+{% endif %}
+<div class="page-header flex justify-between items-center">
+  <div><h2>Reconstructed Sessions</h2><p>{{ flows|length }} flows shown</p></div>
+  <form class="flex gap-2 items-center" method="GET" action="{{ url_for('sessions') }}">
+    {% if request.args.get('analysis_id') %}
+    <input type="hidden" name="analysis_id" value="{{ request.args.get('analysis_id') }}">
+    {% endif %}
+    <!-- SEARCH BAR (fix #3) -->
+    <input type="text" name="search" placeholder="Search IP, port, service…"
+           value="{{ search }}"
+           style="background:var(--card);border:1px solid var(--border);color:var(--text);
+                  padding:7px 12px;border-radius:var(--radius);font-size:13px;width:220px">
+    <select name="proto" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:var(--radius);font-size:13px">
+      <option value="">All protocols</option>
+      <option value="TCP"  {% if proto=='TCP'  %}selected{% endif %}>TCP</option>
+      <option value="UDP"  {% if proto=='UDP'  %}selected{% endif %}>UDP</option>
+      <option value="ICMP" {% if proto=='ICMP' %}selected{% endif %}>ICMP</option>
+    </select>
+    <button type="submit" class="btn btn-primary" style="padding:7px 14px">Search</button>
+    {% if search %}<a href="{{ request.path }}{% if request.args.get('analysis_id') %}?analysis_id={{ request.args.get('analysis_id') }}{% endif %}" class="btn">✕ Clear</a>{% endif %}
+  </form>
+</div>
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>#</th><th>Source</th><th>Destination</th><th>Proto</th>
+        <th>Service</th><th>Pkts</th><th>Bytes</th><th>Duration</th>
+        <th>Retrans</th><th>Score</th>
+      </tr></thead>
+      <tbody>
+        {% for f in flows %}
+        <tr>
+          <td class="text-muted">{{ loop.index }}</td>
+          <td class="mono">{{ f.src_ip }}:{{ f.src_port or '?' }}</td>
+          <td class="mono">{{ f.dst_ip }}:{{ f.dst_port or '?' }}</td>
+          <td><span class="badge badge-info">{{ f.protocol }}</span></td>
+          <td class="text-muted">{{ f.service or '—' }}</td>
+          <td>{{ "{:,}".format(f.packet_count) }}</td>
+          <td>{{ "%.1f"|format((f.byte_count or 0)/1024) }} KB</td>
+          <td class="text-muted">{{ "%.2f"|format(f.duration_sec or 0) }}s</td>
+          <td class="text-muted">—</td>
+          <td>
+            {% set s = f.threat_score or 0 %}
+            <div class="score-bar">
+              <div class="score-bar-track"><div class="score-bar-fill" style="width:{{ s }}%;background:{% if s>=80 %}var(--critical){% elif s>=60 %}var(--high){% elif s>=40 %}var(--medium){% else %}var(--green){% endif %}"></div></div>
+              <span style="font-size:12px;min-width:28px">{{ s }}</span>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="10" class="empty-state" style="text-align:center;padding:32px;color:var(--muted)">
+          {% if search %}No flows match "{{ search }}"{% else %}No flows found{% endif %}
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

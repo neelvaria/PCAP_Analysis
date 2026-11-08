@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — PCAP Engine{% endblock %}
+
+{% block content %}
+<div class="page-header flex justify-between items-center">
+  <div><h2>Investigation Dashboard</h2><p>SOC-grade network forensics</p></div>
+  <a href="{{ url_for('upload') }}" class="btn btn-primary">+ New Investigation</a>
+</div>
+
+<div class="grid-4">
+  <div class="card"><div class="card-title">PCAP Files</div>
+    <div class="card-value text-accent">{{ stats.pcap_files }}</div></div>
+  <div class="card"><div class="card-title">Total Flows</div>
+    <div class="card-value">{{ stats.flows }}</div></div>
+  <div class="card"><div class="card-title">Packets</div>
+    <div class="card-value">{{ stats.packets }}</div></div>
+  <div class="card"><div class="card-title">HTTP Sessions</div>
+    <div class="card-value">{{ stats.http_sessions }}</div></div>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <div class="flex justify-between items-center mb-4">
+      <span style="font-weight:600">Protocol Distribution</span>
+    </div>
+    <div class="chart-box"><canvas id="protoChart"></canvas></div>
+  </div>
+  <div class="card">
+    <div class="flex justify-between items-center mb-4">
+      <span style="font-weight:600">Threat Severity (all cases)</span>
+    </div>
+    <div class="chart-box"><canvas id="severityChart"></canvas></div>
+  </div>
+</div>
+
+<!-- All cases — persistent, survives restart (FIX A + B) -->
+<div class="card">
+  <div class="flex justify-between items-center mb-4">
+    <span style="font-weight:600">Investigation History</span>
+    <a href="{{ url_for('upload') }}" class="btn" style="font-size:12px;padding:5px 12px">+ New</a>
+  </div>
+
+  {% if pcaps %}
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>Case</th><th>File</th><th>Packets</th><th>Duration</th>
+        <th>Threat</th><th>Beacons</th><th>IOCs</th><th>Analysed</th><th></th>
+      </tr></thead>
+      <tbody>
+        {% for p in pcaps %}
+        <tr>
+          <td style="color:var(--accent);font-weight:500">
+            {{ p.case_number or '—' }}
+          </td>
+          <td class="mono" style="font-size:12px">{{ p.filename }}</td>
+          <td>{{ "{:,}".format(p.packet_count) }}</td>
+          <td class="text-muted">{{ "%.1f"|format(p.duration_sec or 0) }}s</td>
+          <td>
+            {% if p.threat_level %}
+              {% set lvl = p.threat_level %}
+              <span class="badge badge-{{ lvl|lower }}">{{ lvl }}</span>
+            {% else %}
+              <span class="badge" style="color:var(--muted)">—</span>
+            {% endif %}
+          </td>
+          <td class="{% if p.beacon_count %}text-red{% else %}text-muted{% endif %}">
+            {{ p.beacon_count or 0 }}
+          </td>
+          <td class="{% if p.ioc_count %}text-red{% else %}text-muted{% endif %}">
+            {{ p.ioc_count or 0 }}
+          </td>
+          <td class="text-muted" style="font-size:12px">{{ (p.analysed_at or '')[:16] }}</td>
+          <td>
+            {# FIX B: View button always present when analysis_id exists #}
+            {% if p.analysis_id %}
+              <a href="{{ url_for('analysis', analysis_id=p.analysis_id) }}"
+                 class="btn" style="font-size:12px;padding:4px 10px">View →</a>
+            {% else %}
+              <span class="text-muted" style="font-size:12px">No case</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <p>No analyses yet</p>
+    <a href="{{ url_for('upload') }}" class="btn btn-primary mt-4">Upload your first PCAP</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Protocol chart
+fetch('/api/protocol_breakdown')
+  .then(r=>r.json()).then(data=>{
+    if(!data.length) return;
+    const colors=['#6366f1','#06b6d4','#22c55e','#eab308','#ef4444','#8b5cf6'];
+    new Chart(document.getElementById('protoChart'),{
+      type:'doughnut',
+      data:{labels:data.map(d=>d.protocol),
+            datasets:[{data:data.map(d=>d.cnt),backgroundColor:colors,borderWidth:0}]},
+      options:{responsive:true,maintainAspectRatio:false,
+               plugins:{legend:{labels:{color:'#94a3b8',font:{size:12}}}}}
+    });
+  }).catch(()=>{});
+
+// FIX E: Severity chart — global aggregate from DB (works after restart)
+fetch('/api/severity_breakdown')
+  .then(r=>r.json()).then(data=>{
+    const vals=[data.CRITICAL||0, data.HIGH||0, data.MEDIUM||0, data.LOW||0];
+    if(vals.every(v=>v===0)) {
+      document.getElementById('severityChart').closest('.card')
+        .insertAdjacentHTML('beforeend',
+          '<p style="text-align:center;color:var(--muted);padding:20px;font-size:13px">'
+          +'No threat data yet — run an analysis to populate</p>');
+      return;
+    }
+    new Chart(document.getElementById('severityChart'),{
+      type:'bar',
+      data:{
+        labels:['CRITICAL','HIGH','MEDIUM','LOW'],
+        datasets:[{
+          data:vals,
+          backgroundColor:['#ff2d55','#ff6b35','#ffd60a','#30d158'],
+          borderWidth:0, borderRadius:6
+        }]
+      },
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{legend:{display:false}},
+        scales:{
+          x:{ticks:{color:'#64748b'},grid:{display:false}},
+          y:{ticks:{color:'#64748b',stepSize:1},grid:{color:'#1e2130'},
+             beginAtZero:true}
+        }
+      }
+    });
+  }).catch(()=>{});
+</script>
+{% endblock %}

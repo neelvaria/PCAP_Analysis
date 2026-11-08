@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}IOC Report — PCAP Engine{% endblock %}
+{% block content %}
+<div class="page-header flex justify-between items-center">
+  <div><h2>IOC Report</h2><p>Indicators of Compromise with MITRE ATT&CK mapping</p></div>
+  <div class="flex gap-2">
+    {% if analysis_id %}
+    <a href="{{ url_for('export_iocs_csv') }}?analysis_id={{ analysis_id }}" class="btn">↓ CSV</a>
+    <a href="{{ url_for('export_iocs_json') }}?analysis_id={{ analysis_id }}" class="btn">↓ JSON</a>
+    {% endif %}
+  </div>
+</div>
+
+{% if iocs %}
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>Severity</th><th>Score</th><th>Type</th><th>Value</th>
+        <th>MITRE Tactic</th><th>Technique</th><th>Context</th><th>Reasons</th>
+      </tr></thead>
+      <tbody>
+        {% for ioc in iocs %}
+        <tr>
+          <td><span class="badge badge-{{ ioc.severity|lower }}">{{ ioc.severity }}</span></td>
+          <td>
+            <div class="score-bar">
+              <div class="score-bar-track"><div class="score-bar-fill" style="width:{{ ioc.score }}%;background:{% if ioc.score>=80 %}var(--critical){% elif ioc.score>=60 %}var(--high){% elif ioc.score>=40 %}var(--medium){% else %}var(--green){% endif %}"></div></div>
+              <span style="font-size:12px;min-width:28px">{{ ioc.score }}</span>
+            </div>
+          </td>
+          <td><span class="badge badge-info">{{ ioc.type }}</span></td>
+          <td class="mono" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ ioc.value }}">{{ ioc.value }}</td>
+          <td class="text-muted">{{ ioc.tactic or '—' }}</td>
+          <td class="mono" style="font-size:11px;color:var(--accent)">{{ ioc.technique or '—' }}</td>
+          <td class="text-muted" style="font-size:12px">{{ ioc.context[:35] if ioc.context else '—' }}</td>
+          <td style="font-size:12px;color:var(--muted);max-width:200px">{{ ioc.reasons[:80] if ioc.reasons else '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card empty-state"><p>No IOCs found for this analysis</p></div>
+{% endif %}
+{% endblock %}

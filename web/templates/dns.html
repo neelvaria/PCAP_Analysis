@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}DNS Analysis — PCAP Engine{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h2>DNS Analysis</h2>
+  <p>Exfiltration detection, tunnelling patterns, DGA domain scoring</p>
+</div>
+
+{% if dns_stats %}
+<div class="grid-4" style="margin-bottom:20px">
+  <div class="card"><div class="card-title">Total Queries</div><div class="card-value">{{ dns_stats.total_queries }}</div></div>
+  <div class="card"><div class="card-title">Unique Domains</div><div class="card-value">{{ dns_stats.unique_domains }}</div></div>
+  <div class="card"><div class="card-title">Suspicious</div><div class="card-value {% if dns_stats.findings %}text-red{% endif %}">{{ dns_stats.findings|length }}</div></div>
+  <div class="card"><div class="card-title">Tunnelling</div><div class="card-value {% if dns_stats.tunnelling_flows %}text-red{% endif %}">{{ dns_stats.tunnelling_flows }}</div></div>
+</div>
+{% endif %}
+
+{% if findings %}
+<div class="card" style="margin-bottom:20px">
+  <div style="font-weight:600;margin-bottom:12px">Suspicious Domains</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>Severity</th><th>Score</th><th>Domain</th><th>Src IP</th>
+        <th>Queries</th><th>Entropy</th><th>Max Label</th><th>Tunnel</th><th>DGA</th>
+      </tr></thead>
+      <tbody>
+        {% for f in findings %}
+        <tr>
+          <td><span class="badge badge-{{ f.severity|lower }}">{{ f.severity }}</span></td>
+          <td>
+            <div class="score-bar">
+              <div class="score-bar-track"><div class="score-bar-fill" style="width:{{ f.score }}%;background:{% if f.score>=80 %}var(--critical){% elif f.score>=60 %}var(--high){% elif f.score>=40 %}var(--medium){% else %}var(--green){% endif %}"></div></div>
+              <span style="font-size:12px;min-width:28px">{{ f.score }}</span>
+            </div>
+          </td>
+          <td class="mono" style="color:var(--accent)">{{ f.domain }}</td>
+          <td class="mono text-muted">{{ f.src_ip }}</td>
+          <td>{{ f.queries }}</td>
+          <td class="{% if f.entropy > 3.5 %}text-red{% endif %}">{{ f.entropy }}</td>
+          <td class="{% if f.max_label > 40 %}text-red{% endif %}">{{ f.max_label }}</td>
+          <td>{% if f.is_tunnel %}<span class="badge badge-critical">YES</span>{% else %}—{% endif %}</td>
+          <td>{% if f.is_dga %}<span class="badge badge-high">YES</span>{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Reason cards -->
+{% for f in findings %}
+<div class="card" style="margin-bottom:12px">
+  <div class="flex justify-between items-center" style="margin-bottom:8px">
+    <span class="mono" style="color:var(--accent)">{{ f.domain }}</span>
+    <span class="badge badge-{{ f.severity|lower }}">{{ f.severity }} · {{ f.score }}/100</span>
+  </div>
+  <ul class="reason-list">{% for r in f.reasons %}<li>{{ r }}</li>{% endfor %}</ul>
+  {% if f.samples %}
+  <div style="margin-top:8px;padding:8px 10px;background:var(--surface);border-radius:6px;font-size:11px;font-family:monospace;color:var(--muted)">
+    Sample queries:<br>{% for s in f.samples %}{{ s }}<br>{% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endfor %}
+
+{% else %}
+<div class="card empty-state"><p style="color:var(--green)">✓ No suspicious DNS activity detected</p></div>
+{% endif %}
+
+{% if top_queried %}
+<div class="card mt-4">
+  <div style="font-weight:600;margin-bottom:12px">Top Queried Domains</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>#</th><th>Domain</th><th>Queries</th></tr></thead>
+      <tbody>
+        {% for dom, cnt in top_queried %}
+        <tr>
+          <td class="text-muted">{{ loop.index }}</td>
+          <td class="mono">{{ dom }}</td>
+          <td>{{ cnt }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

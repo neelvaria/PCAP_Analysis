@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Attack Chains — PCAP Engine{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h2>Attack Chain Correlation</h2>
+  <p>Multi-stage attack reconstruction grouped by source host</p>
+</div>
+
+{% if chains %}
+<div class="card" style="margin-bottom:20px">
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>Severity</th><th>Score</th><th>Source IP</th><th>Phases</th>
+        <th>Duration</th><th>MITRE Tactics</th><th>Events</th>
+      </tr></thead>
+      <tbody>
+        {% for c in chains %}
+        <tr>
+          <td><span class="badge badge-{{ c.severity|lower }}">{{ c.severity }}</span></td>
+          <td>
+            <div class="score-bar">
+              <div class="score-bar-track"><div class="score-bar-fill" style="width:{{ c.score }}%;background:{% if c.score>=80 %}var(--critical){% elif c.score>=60 %}var(--high){% elif c.score>=40 %}var(--medium){% else %}var(--green){% endif %}"></div></div>
+              <span style="font-size:12px;min-width:28px">{{ c.score }}</span>
+            </div>
+          </td>
+          <td class="mono" style="color:var(--accent)">{{ c.src_ip }}</td>
+          <td style="font-size:12px">{{ c.phases | join(" → ") }}</td>
+          <td class="text-muted">{{ c.duration }}s</td>
+          <td style="font-size:11px;font-family:monospace;color:var(--muted)">{{ c.mitre | join(", ") }}</td>
+          <td>{{ c.event_count }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% for c in chains %}
+<div class="card" style="margin-bottom:12px">
+  <div class="flex justify-between items-center" style="margin-bottom:8px">
+    <span class="mono" style="color:var(--accent)">{{ c.src_ip }}</span>
+    <span class="badge badge-{{ c.severity|lower }}">{{ c.severity }} · {{ c.score }}/100</span>
+  </div>
+  <p style="font-size:13px;color:var(--text);margin-bottom:8px">{{ c.narrative }}</p>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+    {% for phase in c.phases %}
+    <span class="badge" style="background:rgba(99,102,241,.15);color:var(--accent)">{{ phase }}</span>
+    {% endfor %}
+  </div>
+  {% if c.mitre %}
+  <p style="font-size:11px;font-family:monospace;color:var(--muted)">MITRE: {{ c.mitre | join(", ") }}</p>
+  {% endif %}
+</div>
+{% endfor %}
+
+{% else %}
+<div class="card empty-state">
+  <p style="color:var(--green)">✓ No multi-stage attack chains detected</p>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Beacon Detection — PCAP Engine{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h2>C2 Beacon Detection</h2>
+  <p>Flows with suspicious regularity, suspicious ports, or known malicious TLS fingerprints</p>
+</div>
+
+{% if beacons %}
+<div class="card" style="margin-bottom:20px">
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>Severity</th><th>Score</th><th>Source IP</th><th>Destination</th>
+        <th>Proto</th><th>Interval</th><th>CV</th><th>Pkts</th><th>JA3</th>
+      </tr></thead>
+      <tbody>
+        {% for b in beacons %}
+        <tr>
+          <td><span class="badge badge-{{ b.severity|lower }}">{{ b.severity }}</span></td>
+          <td>
+            <div class="score-bar">
+              <div class="score-bar-track"><div class="score-bar-fill" style="width:{{ b.score }}%;background:{% if b.score>=80 %}var(--critical){% elif b.score>=60 %}var(--high){% elif b.score>=40 %}var(--medium){% else %}var(--green){% endif %}"></div></div>
+              <span style="font-size:12px;min-width:28px">{{ b.score }}</span>
+            </div>
+          </td>
+          <td class="mono">{{ b.src_ip }}</td>
+          <td class="mono">{{ b.dst_ip }}:{{ b.dst_port or '?' }}</td>
+          <td><span class="badge badge-info">{{ b.protocol }}</span></td>
+          <td>{{ b.interval_mean }}s</td>
+          <td class="{% if b.interval_cv < 0.15 %}text-red{% elif b.interval_cv < 0.3 %}text-muted{% endif %}">
+            {{ b.interval_cv }}</td>
+          <td>{{ b.packet_count }}</td>
+          <td>
+            {% if b.ja3_match %}
+              <span class="badge badge-critical" title="{{ b.ja3 }}">{{ b.ja3_match }}</span>
+            {% elif b.ja3 %}
+              <span class="mono text-muted" style="font-size:10px">{{ b.ja3[:12] }}…</span>
+            {% else %}—{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Detailed reason cards -->
+{% for b in beacons %}
+<div class="card" style="margin-bottom:12px">
+  <div class="flex justify-between items-center" style="margin-bottom:8px">
+    <span class="mono" style="font-size:13px;color:var(--accent)">
+      {{ b.src_ip }} → {{ b.dst_ip }}:{{ b.dst_port or '?' }} [{{ b.protocol }}]
+    </span>
+    <span class="badge badge-{{ b.severity|lower }}">{{ b.severity }} · {{ b.score }}/100</span>
+  </div>
+  <ul class="reason-list">
+    {% for r in b.reasons %}<li>{{ r }}</li>{% endfor %}
+  </ul>
+</div>
+{% endfor %}
+
+{% else %}
+<div class="card empty-state">
+  <p style="color:var(--green)">✓ No C2 beaconing patterns detected</p>
+</div>
+{% endif %}
+{% endblock %}
